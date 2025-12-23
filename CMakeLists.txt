@@ -8,7 +8,12 @@ set(PROJECT_VER "2.1.0")
 
 # Add this line to disable the specific warning
 add_compile_options(-Wno-missing-field-initializers)
+# Disable format warnings as errors for external components (esp_emote_gfx has format issues)
+add_compile_options(-Wno-error=format)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(xiaozhi)
+
+# Apply to all components (including managed ones) after project() is called
+idf_build_set_property(COMPILE_OPTIONS "-Wno-error=format" APPEND)
 

@@ -240,6 +240,9 @@ choice BOARD_TYPE
     config BOARD_TYPE_M5STACK_ATOM_MATRIX_ECHO_BASE
         bool "M5Stack AtomMatrix + Echo Base"
         depends on IDF_TARGET_ESP32
+    config BOARD_TYPE_M5STACK_CORE_FIRE
+        bool "M5Stack Core Fire 2018.2A"
+        depends on IDF_TARGET_ESP32
     config BOARD_TYPE_WAVESHARE_S3_AUDIO_BOARD
         bool "Waveshare ESP32-S3-Audio-Board"
         depends on IDF_TARGET_ESP32S3
