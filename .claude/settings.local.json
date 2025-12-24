@@ -5,7 +5,10 @@
       "Bash(ls:*)",
       "Bash(/bin/bash -c 'unset VIRTUAL_ENV; export PATH=\"\"/Library/Developer/CommandLineTools/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin\"\"; source ~/esp/esp-idf/export.sh 2>/dev/null && export PATH=\"\"/opt/homebrew/bin:$PATH\"\" && idf.py build 2>&1 | tail -150')",
       "Bash(/bin/bash:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(find:*)"
     ]
   }
 }

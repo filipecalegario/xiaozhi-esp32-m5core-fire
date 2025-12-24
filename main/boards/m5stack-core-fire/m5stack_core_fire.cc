@@ -177,7 +177,7 @@ private:
             EnterWifiConfigMode();
         });
 
-        // Button B - Volume down
+        // Button B - Volume down (single click) / Send text message (double click)
         button_b_.OnClick([this]() {
             ESP_LOGI(TAG, "Button B clicked - volume down");
             auto codec = GetAudioCodec();
@@ -185,6 +185,12 @@ private:
             int new_volume = std::max(0, current_volume - 10);
             codec->SetOutputVolume(new_volume);
             ESP_LOGI(TAG, "Volume: %d -> %d", current_volume, new_volume);
+        });
+
+        button_b_.OnDoubleClick([this]() {
+            ESP_LOGI(TAG, "Button B double clicked - sending text message");
+            auto& app = Application::GetInstance();
+            app.SendTextMessage("Olá");
         });
 
         // Button C - Volume up

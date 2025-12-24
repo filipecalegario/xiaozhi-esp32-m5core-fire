@@ -1011,6 +1011,40 @@ void Application::SendMcpMessage(const std::string& payload) {
     });
 }
 
+void Application::SendTextMessage(const std::string& text) {
+    // Schedule to run in main task for thread safety
+    Schedule([this, text = std::move(text)]() {
+        if (!protocol_) {
+            ESP_LOGE(TAG, "Protocol not initialized");
+            return;
+        }
+
+        auto state = GetDeviceState();
+
+        // If not connected, open the audio channel first
+        if (state == kDeviceStateIdle) {
+            if (!protocol_->IsAudioChannelOpened()) {
+                SetDeviceState(kDeviceStateConnecting);
+                if (!protocol_->OpenAudioChannel()) {
+                    ESP_LOGE(TAG, "Failed to open audio channel");
+                    return;
+                }
+            }
+        }
+
+        // Show the text message on the display
+        auto display = Board::GetInstance().GetDisplay();
+        display->SetChatMessage("user", text.c_str());
+        ESP_LOGI(TAG, ">> %s", text.c_str());
+
+        // Send the text message to the server
+        protocol_->SendTextMessage(text);
+
+        // Set the device state to listening to wait for response
+        SetDeviceState(kDeviceStateSpeaking);
+    });
+}
+
 void Application::SetAecMode(AecMode mode) {
     aec_mode_ = mode;
     Schedule([this]() {
