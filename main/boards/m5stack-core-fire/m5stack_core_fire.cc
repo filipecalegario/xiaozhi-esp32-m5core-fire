@@ -5,6 +5,7 @@
 #include "button.h"
 #include "config.h"
 #include "led/circular_strip.h"
+#include "led/led.h"
 #include "i2c_device.h"
 
 #include <esp_log.h>
@@ -216,7 +217,7 @@ public:
         InitializePowerManagement();
         InitializeSpi();
         InitializeLcdDisplay();
-        InitializeLedStrip();
+        // InitializeLedStrip();  // Disabled to reduce potential interference with ADC mic
         InitializeButtons();
 
         // Restore backlight brightness
@@ -235,7 +236,9 @@ public:
     }
 
     virtual Led* GetLed() override {
-        return led_strip_;
+        // LED strip disabled due to hardware conflicts
+        static NoLed no_led;
+        return &no_led;
     }
 
     virtual AudioCodec* GetAudioCodec() override {

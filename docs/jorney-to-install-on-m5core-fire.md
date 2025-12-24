@@ -1,22 +1,50 @@
-The DTR toggle caused issues. The device was running fine before - I saw SystemInfo logs showing it's healthy. Let me give you a summary:
+# Journey to Install XiaoZhi on M5Stack Core Fire
 
-  The M5Stack Core Fire is now successfully booting with XiaoZhi!
+**Data:** 24 de Dezembro de 2024
 
-  However, due to hardware limitations of the original ESP32, I had to disable microphone input:
+## Status Atual: FUNCIONANDO
 
-  - Display: Working (ILI9342C LCD 320x240)
-  - LED Strip: Working (10x SK6812 RGB LEDs)
-  - Buttons: Working (A, B, C buttons)
-  - Battery: Working (IP5306 power management)
-  - Audio Output: Working (DAC oneshot mode on GPIO25)
-  - Audio Input: Not available due to ESP32 I2S limitations
+O M5Stack Core Fire agora funciona com XiaoZhi com as seguintes capacidades:
 
-  The fundamental issue: The original ESP32 cannot simultaneously use:
-  - ADC continuous mode (for microphone) - requires I2S0 for DMA
-  - DAC continuous mode (for speaker) - also requires I2S0 for DMA
+| Componente | Status | Notas |
+|------------|--------|-------|
+| Display | Funcionando | ILI9342C LCD 320x240 |
+| LED Strip | Desabilitado | Conflito com RMT, usando NoLed |
+| Botões | Funcionando | A, B, C buttons |
+| Bateria | Funcionando | IP5306 power management |
+| Audio Output | Desabilitado | Respostas em texto no display |
+| **Audio Input** | **FUNCIONANDO** | ADC oneshot mode no GPIO34 |
 
-  Both peripherals share the same I2S0 hardware, making full-duplex audio impossible with only internal peripherals.
+## Resumo da Jornada
 
-  Current state: The device boots, shows the XiaoZhi UI, and can play audio output (TTS). However, voice input is not functional. The display should show the XiaoZhi interface, and the buttons should be responsive.
+### Problema Original
 
-  To enable full audio capability, you would need to add an external I2S audio codec module (like MAX98357 for speaker + INMP441 for microphone) connected to the I2S pins.
+O ESP32 original não pode usar simultaneamente:
+- ADC continuous mode (microfone) - requer I2S0 para DMA
+- DAC continuous mode (speaker) - também requer I2S0 para DMA
+
+### Solução Implementada
+
+1. **ADC Oneshot Mode**: Reescrevemos `FireAudioCodec` para usar ADC oneshot em vez de continuous mode
+2. **LED Strip Desabilitado**: O periférico RMT causava conflitos, desabilitamos e usamos `NoLed`
+3. **Taxa de Amostragem Corrigida**: silk_resampler só suporta 8000, 12000, 16000, 24000, 48000 Hz
+4. **Calibração DC Offset**: Removemos o offset DC do sinal do microfone MEMS
+
+### Documentação Técnica
+
+Veja [m5core-fire-microphone-fix.md](./m5core-fire-microphone-fix.md) para detalhes técnicos completos.
+
+## Hardware Necessário
+
+- M5Stack Core Fire
+- **M5GO Base** (contém o microfone MEMS BSE3729)
+
+## Como Usar
+
+1. Pressione **Botão A** para ativar modo de escuta (listening)
+2. Fale no microfone (na M5GO Base)
+3. A resposta aparece em texto no display
+
+## Para Áudio Bidirecional (Futuro)
+
+Para habilitar entrada e saída de áudio simultâneas, seria necessário adicionar um codec I2S externo (como MAX98357 + INMP441).
