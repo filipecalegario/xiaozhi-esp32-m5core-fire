@@ -195,12 +195,14 @@ private:
             app.SendTextMessage("Olá");
         });
 
-        // Button C - Play test tone
+        // Button C - Volume up
         button_c_.OnClick([this]() {
-            ESP_LOGI(TAG, "Button C clicked - playing test tone");
-            auto& app = Application::GetInstance();
-            // Play the success sound to test audio output
-            app.PlaySound(Lang::Sounds::OGG_SUCCESS);
+            ESP_LOGI(TAG, "Button C clicked - volume up");
+            auto codec = GetAudioCodec();
+            int current_volume = codec->output_volume();
+            int new_volume = std::min(100, current_volume + 10);
+            codec->SetOutputVolume(new_volume);
+            ESP_LOGI(TAG, "Volume: %d -> %d", current_volume, new_volume);
         });
     }
 

@@ -101,6 +101,15 @@ private:
     std::mutex mutex_;
 
     /**
+     * Pre-allocated stereo buffers for audio conversion
+     * Avoids heap fragmentation from repeated malloc/free during streaming
+     * Size must accommodate largest expected frame (960 samples at 16kHz)
+     */
+    static constexpr size_t STEREO_BUFFER_SAMPLES = 1024;  // Max samples per call
+    int16_t* tx_stereo_buffer_ = nullptr;  // For Write(): mono→stereo conversion
+    int16_t* rx_stereo_buffer_ = nullptr;  // For Read(): stereo→mono conversion
+
+    /**
      * @brief Create I2S full-duplex channels
      * @param mclk Master clock GPIO
      * @param bclk Bit clock GPIO

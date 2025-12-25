@@ -87,9 +87,9 @@ Both input and output use 16kHz for full-duplex operation. The server may use 24
 |--------|--------|----------|
 | A | Click | Toggle voice chat (start/stop listening) |
 | A | Long Press | Enter WiFi configuration mode |
-| B | Click | Volume down |
+| B | Click | Volume down (-10%) |
 | B | Double Click | Send "Olá" text message |
-| C | Click | Play test tone (audio test) |
+| C | Click | Volume up (+10%) |
 
 ## Build Instructions
 

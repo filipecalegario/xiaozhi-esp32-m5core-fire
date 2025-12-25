@@ -112,6 +112,19 @@ Wm8978AudioCodec::Wm8978AudioCodec(i2c_master_bus_handle_t i2c_bus,
     // Create I2S channels (even if codec failed, for testing)
     CreateDuplexChannels(mclk, bclk, ws, dout, din);
 
+    // Pre-allocate stereo buffers to avoid heap fragmentation during streaming
+    // Using DMA-capable memory for better performance
+    tx_stereo_buffer_ = (int16_t*)heap_caps_malloc(
+        STEREO_BUFFER_SAMPLES * 2 * sizeof(int16_t), MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
+    rx_stereo_buffer_ = (int16_t*)heap_caps_malloc(
+        STEREO_BUFFER_SAMPLES * 2 * sizeof(int16_t), MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
+
+    if (!tx_stereo_buffer_ || !rx_stereo_buffer_) {
+        ESP_LOGE(TAG, "Failed to allocate stereo buffers!");
+    } else {
+        ESP_LOGI(TAG, "Pre-allocated stereo buffers: %d samples each", STEREO_BUFFER_SAMPLES);
+    }
+
     // Setup PA pin if specified
     if (pa_pin_ != GPIO_NUM_NC) {
         gpio_config_t io_conf = {};
@@ -142,6 +155,13 @@ Wm8978AudioCodec::~Wm8978AudioCodec() {
     }
     if (i2c_dev_) {
         i2c_master_bus_rm_device(i2c_dev_);
+    }
+    // Free pre-allocated stereo buffers
+    if (tx_stereo_buffer_) {
+        heap_caps_free(tx_stereo_buffer_);
+    }
+    if (rx_stereo_buffer_) {
+        heap_caps_free(rx_stereo_buffer_);
     }
 }
 
@@ -226,8 +246,20 @@ bool Wm8978AudioCodec::InitCodec() {
     // R10 (DAC_CTRL): 0x008 = Disable soft mute, 128x oversampling
     WriteReg(WM8978_DAC_CTRL, 0x008);
 
+    // R11 (LEFT_DAC_VOL): 0x1FF = Max volume (0dB) with update bit
+    WriteReg(WM8978_LEFT_DAC_VOL, 0x1FF);
+
+    // R12 (RIGHT_DAC_VOL): 0x1FF = Max volume (0dB) with update bit
+    WriteReg(WM8978_RIGHT_DAC_VOL, 0x1FF);
+
     // R14 (ADC_CTRL): 0x108 = ADC 128x oversampling, high-pass filter at 3.7Hz
     WriteReg(WM8978_ADC_CTRL, 0x108);
+
+    // R15 (LEFT_ADC_VOL): 0x1FF = Max volume (0dB) with update bit
+    WriteReg(WM8978_LEFT_ADC_VOL, 0x1FF);
+
+    // R16 (RIGHT_ADC_VOL): 0x1FF = Max volume (0dB) with update bit
+    WriteReg(WM8978_RIGHT_ADC_VOL, 0x1FF);
 
     // ============================================
     // Beep Control - IMPORTANT for speaker output
@@ -240,6 +272,17 @@ bool Wm8978AudioCodec::InitCodec() {
     // ============================================
     // Mic/Input Configuration
     // ============================================
+
+    // R44 (INPUT_CTRL): Connect L2/R2 inputs to PGA for microphone
+    // Bits [5:4] = L2_2INPPGA, R2_2INPPGA (connect L2/R2 to input PGA)
+    WriteReg(WM8978_INPUT_CTRL, 0x033);  // Enable L2 and R2 inputs
+
+    // R45 (LEFT_INP_PGA): Unmute, max volume
+    // Bit [7] = INPPGAMUTEL (0=unmute), Bits [5:0] = volume (0x3F=max)
+    WriteReg(WM8978_LEFT_INP_PGA, 0x13F);  // Unmute, max gain, update
+
+    // R46 (RIGHT_INP_PGA): Unmute, max volume
+    WriteReg(WM8978_RIGHT_INP_PGA, 0x13F);  // Unmute, max gain, update
 
     // R47 (LEFT_ADC_BOOST): 0x100 = +20dB boost for microphone
     WriteReg(WM8978_LEFT_ADC_BOOST, 0x100);
@@ -358,8 +401,9 @@ void Wm8978AudioCodec::SetOutputVolume(int volume) {
 void Wm8978AudioCodec::SetMicGain(uint8_t gain) {
     if (gain > 63) gain = 63;
 
-    WriteReg(WM8978_LEFT_INP_PGA, gain);
-    WriteReg(WM8978_RIGHT_INP_PGA, gain);
+    // Set update bit (0x100) to apply changes immediately
+    WriteReg(WM8978_LEFT_INP_PGA, 0x100 | gain);
+    WriteReg(WM8978_RIGHT_INP_PGA, 0x100 | gain);
     ESP_LOGI(TAG, "Mic gain set to %d", gain);
 }
 
@@ -432,30 +476,34 @@ void Wm8978AudioCodec::EnableOutput(bool enable) {
 }
 
 int Wm8978AudioCodec::Read(int16_t* dest, int samples) {
-    if (input_enabled_ && rx_handle_) {
-        size_t bytes_read = 0;
-        // WM8978 outputs stereo, we read stereo but extract mono
-        // Use heap allocation to avoid stack overflow
-        int16_t* stereo_buffer = (int16_t*)heap_caps_malloc(samples * 2 * sizeof(int16_t), MALLOC_CAP_8BIT);
-        if (stereo_buffer == nullptr) {
-            ESP_LOGE(TAG, "Failed to allocate stereo buffer for read");
-            memset(dest, 0, samples * sizeof(int16_t));
-            return samples;
+    if (input_enabled_ && rx_handle_ && rx_stereo_buffer_) {
+        // Check if samples exceeds pre-allocated buffer
+        if (samples > (int)STEREO_BUFFER_SAMPLES) {
+            ESP_LOGW(TAG, "Read samples %d exceeds buffer %d, truncating",
+                     samples, STEREO_BUFFER_SAMPLES);
+            samples = STEREO_BUFFER_SAMPLES;
         }
 
-        esp_err_t ret = i2s_channel_read(rx_handle_, stereo_buffer,
+        size_t bytes_read = 0;
+        // WM8978 outputs stereo, we read stereo but extract mono
+        // Using pre-allocated buffer to avoid heap fragmentation
+        esp_err_t ret = i2s_channel_read(rx_handle_, rx_stereo_buffer_,
                                          samples * 2 * sizeof(int16_t),
                                          &bytes_read, portMAX_DELAY);
-        if (ret == ESP_OK) {
+        if (ret == ESP_OK && bytes_read > 0) {
             // Extract left channel only (mono)
-            for (int i = 0; i < samples; i++) {
-                dest[i] = stereo_buffer[i * 2];  // Left channel
+            int samples_read = bytes_read / (2 * sizeof(int16_t));
+            for (int i = 0; i < samples_read; i++) {
+                dest[i] = rx_stereo_buffer_[i * 2];  // Left channel
+            }
+            // Zero remaining samples if any
+            if (samples_read < samples) {
+                memset(&dest[samples_read], 0, (samples - samples_read) * sizeof(int16_t));
             }
         } else {
-            ESP_LOGE(TAG, "I2S read failed: %s", esp_err_to_name(ret));
+            ESP_LOGE(TAG, "I2S read failed: %s (bytes_read=%d)", esp_err_to_name(ret), bytes_read);
             memset(dest, 0, samples * sizeof(int16_t));
         }
-        heap_caps_free(stereo_buffer);
     } else {
         memset(dest, 0, samples * sizeof(int16_t));
     }
@@ -463,28 +511,28 @@ int Wm8978AudioCodec::Read(int16_t* dest, int samples) {
 }
 
 int Wm8978AudioCodec::Write(const int16_t* data, int samples) {
-    if (output_enabled_ && tx_handle_ && data != nullptr) {
-        // Convert mono to stereo for WM8978
-        // Use heap allocation to avoid stack overflow
-        int16_t* stereo_buffer = (int16_t*)heap_caps_malloc(samples * 2 * sizeof(int16_t), MALLOC_CAP_8BIT);
-        if (stereo_buffer == nullptr) {
-            ESP_LOGE(TAG, "Failed to allocate stereo buffer for write");
-            return samples;
+    if (output_enabled_ && tx_handle_ && data != nullptr && tx_stereo_buffer_) {
+        // Check if samples exceeds pre-allocated buffer
+        if (samples > (int)STEREO_BUFFER_SAMPLES) {
+            ESP_LOGW(TAG, "Write samples %d exceeds buffer %d, truncating",
+                     samples, STEREO_BUFFER_SAMPLES);
+            samples = STEREO_BUFFER_SAMPLES;
         }
 
+        // Convert mono to stereo for WM8978
+        // Using pre-allocated buffer to avoid heap fragmentation
         for (int i = 0; i < samples; i++) {
-            stereo_buffer[i * 2] = data[i];      // Left
-            stereo_buffer[i * 2 + 1] = data[i];  // Right
+            tx_stereo_buffer_[i * 2] = data[i];      // Left
+            tx_stereo_buffer_[i * 2 + 1] = data[i];  // Right
         }
 
         size_t bytes_written = 0;
-        esp_err_t ret = i2s_channel_write(tx_handle_, stereo_buffer,
+        esp_err_t ret = i2s_channel_write(tx_handle_, tx_stereo_buffer_,
                                           samples * 2 * sizeof(int16_t),
                                           &bytes_written, portMAX_DELAY);
         if (ret != ESP_OK) {
             ESP_LOGE(TAG, "I2S write failed: %s", esp_err_to_name(ret));
         }
-        heap_caps_free(stereo_buffer);
     }
     return samples;
 }
