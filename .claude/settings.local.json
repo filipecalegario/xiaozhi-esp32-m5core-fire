@@ -17,5 +17,8 @@
       "Bash(timeout 10 cat:*)",
       "Bash(tee:*)"
     ]
+  },
+  "enabledPlugins": {
+    "clangd@claude-code-lsps": true
   }
 }

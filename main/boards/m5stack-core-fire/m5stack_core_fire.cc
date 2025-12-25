@@ -267,6 +267,16 @@ public:
         }
         return nullptr;
     }
+
+    virtual bool GetBatteryLevel(int& level, bool& charging, bool& discharging) override {
+        if (ip5306_ == nullptr) {
+            return false;  // No battery monitoring available
+        }
+        level = ip5306_->GetBatteryLevel();
+        charging = ip5306_->IsCharging();
+        discharging = !charging;  // IP5306 doesn't have separate discharging detection
+        return true;
+    }
 };
 
 DECLARE_BOARD(M5StackCoreFireBoard);
