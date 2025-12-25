@@ -1,8 +1,17 @@
-# M5Stack Core Fire - Microphone Fix Documentation
+# M5Stack Core Fire - Microphone Fix Documentation (DEPRECATED)
 
 **Data:** 24 de Dezembro de 2024
 
-OBSERVAÇÃO: ESSA É UMA VERSÃO ANTIGA DA SOLUÇÃO.
+> **ATENÇÃO: ESTA DOCUMENTAÇÃO ESTÁ OBSOLETA!**
+>
+> Esta solução usava o **M5GO Base** com microfone ADC e saída PDM.
+>
+> A solução atual usa o **M5Stack Node Base** com codec **WM8978**, que oferece:
+> - Áudio full-duplex I2S (entrada e saída simultâneas)
+> - Qualidade muito superior (24-bit vs 12-bit ADC)
+> - Menor latência
+>
+> Consulte: [docs/m5core-fire.md](m5core-fire.md) para a documentação atualizada.
 
 ## Resumo
 

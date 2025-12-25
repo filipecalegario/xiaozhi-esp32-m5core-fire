@@ -10,7 +10,7 @@ Board configuration for M5Stack Core Fire (version 2018.2A) with M5Stack Node Ba
 - **PSRAM**: 8MB (4MB usable due to ESP32 limitations)
 - **Display**: ILI9342C 320x240 LCD (2 inch IPS)
 - **Buttons**: 3 physical buttons (A, B, C)
-- **Battery**: 500mAh Li-ion (in M5GO Base)
+- **Battery**: 500mAh Li-ion (optional, requires M5GO Base bottom)
 - **Power Management**: IP5306 PMIC
 
 ### M5Stack Node Base (Audio)
@@ -184,6 +184,12 @@ Playback (Server → Speaker):
    - Single I2S peripheral with both TX and RX channels
    - Same sample rate required for both directions
 
+5. **Full-Duplex Clock Sharing (Critical!)**
+   - TX and RX channels share the same I2S clock
+   - **Never disable I2S channels during operation** - this stops the shared clock
+   - Channels are enabled once at startup and kept running
+   - Enable/Disable functions only track state and control PA GPIO
+
 ## Troubleshooting
 
 ### No Audio Output
@@ -211,6 +217,11 @@ Playback (Server → Speaker):
 - Warning: `Server sample rate 24000 does not match device output sample rate 16000`
 - This is normal - resampling occurs automatically
 - For better quality, both rates should match
+
+### Audio Stops During Long Playback
+- Symptom: Audio plays for ~20-30 seconds then stops with `ESP_ERR_TIMEOUT` errors
+- Cause: I2S RX channel was being disabled, stopping the shared clock
+- Solution: Keep both I2S channels always enabled (see Full-Duplex Clock Sharing above)
 
 ## Hardware Notes
 
@@ -243,5 +254,8 @@ Some M5GO Base units may have hardware issues causing the Fire to shut down when
 
 | Date | Changes |
 |------|---------|
+| 2025-12-25 | Fixed full-duplex streaming: keep I2S channels always enabled |
+| 2025-12-25 | Added DAC/ADC volume registers, input PGA configuration |
+| 2025-12-25 | Pre-allocated DMA buffers to prevent heap fragmentation |
 | 2025-12-25 | Added WM8978 Node Base support, full-duplex I2S audio |
-| 2024-xx-xx | Initial M5Stack Core Fire support with PDM audio |
+| 2024-xx-xx | Initial M5Stack Core Fire support with PDM audio (M5GO Base) |
