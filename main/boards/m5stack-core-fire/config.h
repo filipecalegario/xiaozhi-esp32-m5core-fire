@@ -4,26 +4,34 @@
 // M5Stack Core Fire 2018.2A Board Configuration
 // Hardware: ESP32-D0WDQ6, 16MB Flash, 8MB PSRAM
 // Display: ILI9342C 320x240 LCD
-// Audio: MEMS Mic (ADC) + Speaker (PDM)
+// Audio: WM8978 codec via Node Base (I2S full-duplex)
 
 #include <driver/gpio.h>
 
 // ============================================
-// Audio Configuration
+// Audio Configuration (WM8978 via Node Base)
 // ============================================
 #define AUDIO_INPUT_SAMPLE_RATE  16000
-#define AUDIO_OUTPUT_SAMPLE_RATE 24000
+#define AUDIO_OUTPUT_SAMPLE_RATE 16000  // Must match input for duplex
 
-// PDM upsampling factor (range: <=480, 441 is more stable on some devices)
-#define AUDIO_PDM_UPSAMPLE_FS    441
+// WM8978 I2S pins (Node Base)
+// Note: GPIO0 is used for MCLK on Node Base
+// The WM8978 requires MCLK for proper operation
+#define AUDIO_I2S_MCLK_GPIO      GPIO_NUM_0  // MCLK on Node Base
+#define AUDIO_I2S_BCK_GPIO       GPIO_NUM_5
+#define AUDIO_I2S_WS_GPIO        GPIO_NUM_13
+#define AUDIO_I2S_DOUT_GPIO      GPIO_NUM_2   // To codec (speaker)
+#define AUDIO_I2S_DIN_GPIO       GPIO_NUM_34  // From codec (mic)
 
-// Microphone: MEMS BSE3729 analog on GPIO34 (ADC1_CH6)
+// WM8978 I2C address
+#define AUDIO_WM8978_ADDR        0x1A
+
+// PA control (not used on Node Base)
+#define AUDIO_PA_CTL_GPIO        GPIO_NUM_NC
+
+// Legacy defines for compatibility (not used with WM8978)
 #define AUDIO_ADC_MIC_CHANNEL    6
-
-// Speaker: PDM output on GPIO25 (internal DAC pin)
 #define AUDIO_PDM_SPEAK_P_GPIO   GPIO_NUM_25
-#define AUDIO_PDM_SPEAK_N_GPIO   GPIO_NUM_NC  // Single-ended output
-#define AUDIO_PA_CTL_GPIO        GPIO_NUM_NC  // No PA control needed
 
 // ============================================
 // Display Configuration (ILI9342C via SPI)

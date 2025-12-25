@@ -1,5 +1,5 @@
 #include "wifi_board.h"
-#include "fire_audio_codec.h"
+#include "wm8978_audio_codec.h"
 #include "display/lcd_display.h"
 #include "application.h"
 #include "button.h"
@@ -96,14 +96,14 @@ private:
     }
 
     void InitializePowerManagement() {
-        ESP_LOGI(TAG, "Checking for IP5306 power management (M5GO Base)");
+        ESP_LOGI(TAG, "Checking for IP5306 power management");
         Ip5306* ip5306 = new Ip5306(i2c_bus_, IP5306_ADDR);
         if (ip5306->Initialize()) {
             ip5306_ = ip5306;  // Keep reference only if device found
         } else {
             delete ip5306;     // Clean up if device not present
             ip5306_ = nullptr;
-            ESP_LOGI(TAG, "Continuing without IP5306 (battery monitoring unavailable)");
+            ESP_LOGI(TAG, "IP5306 not found (no battery monitoring)");
         }
     }
 
@@ -216,7 +216,7 @@ public:
         InitializePowerManagement();
         InitializeSpi();
         InitializeLcdDisplay();
-        // InitializeLedStrip();  // Disabled to reduce potential interference with ADC mic
+        // InitializeLedStrip();  // Disabled - Node Base has different LED configuration
         InitializeButtons();
 
         // Restore backlight brightness
@@ -241,11 +241,15 @@ public:
     }
 
     virtual AudioCodec* GetAudioCodec() override {
-        static FireAudioCodec audio_codec(
+        static Wm8978AudioCodec audio_codec(
+            i2c_bus_,
             AUDIO_INPUT_SAMPLE_RATE,
             AUDIO_OUTPUT_SAMPLE_RATE,
-            AUDIO_ADC_MIC_CHANNEL,
-            AUDIO_PDM_SPEAK_P_GPIO,
+            AUDIO_I2S_MCLK_GPIO,
+            AUDIO_I2S_BCK_GPIO,
+            AUDIO_I2S_WS_GPIO,
+            AUDIO_I2S_DOUT_GPIO,
+            AUDIO_I2S_DIN_GPIO,
             AUDIO_PA_CTL_GPIO);
         return &audio_codec;
     }

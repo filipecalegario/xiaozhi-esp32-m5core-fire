@@ -11,7 +11,11 @@
       "Bash(find:*)",
       "WebFetch(domain:docs.m5stack.com)",
       "WebSearch",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(timeout 15 cat:*)",
+      "Bash(stty:*)",
+      "Bash(timeout 10 cat:*)",
+      "Bash(tee:*)"
     ]
   }
 }
