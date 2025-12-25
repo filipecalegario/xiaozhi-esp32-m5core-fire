@@ -492,8 +492,22 @@ void Application::InitializeProtocol() {
     });
     
     protocol_->OnIncomingAudio([this](std::unique_ptr<AudioStreamPacket> packet) {
+        static int audio_packet_count = 0;
+        audio_packet_count++;
+
+        // Play beep on first audio packet to confirm audio is being received
+        if (audio_packet_count == 1) {
+            ESP_LOGI(TAG, "First audio packet received! Playing confirmation beep.");
+            audio_service_.PlaySound(Lang::Sounds::OGG_SUCCESS);
+        }
+
+        ESP_LOGI(TAG, "Received audio packet #%d, size=%d, state=%d",
+                 audio_packet_count, (int)packet->payload.size(), (int)GetDeviceState());
+
         if (GetDeviceState() == kDeviceStateSpeaking) {
             audio_service_.PushPacketToDecodeQueue(std::move(packet));
+        } else {
+            ESP_LOGW(TAG, "Dropping audio packet - not in Speaking state");
         }
     });
     
