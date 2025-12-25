@@ -2,6 +2,8 @@
 
 **Data:** 24 de Dezembro de 2024
 
+OBSERVAÇÃO: ESSA É UMA VERSÃO ANTIGA DA SOLUÇÃO.
+
 ## Resumo
 
 Este documento descreve a solução implementada para fazer o microfone MEMS BSE3729 do M5Stack Core Fire funcionar com o projeto XiaoZhi. A solução utiliza **ADC oneshot mode** em vez do modo contínuo, que não funciona corretamente neste hardware.

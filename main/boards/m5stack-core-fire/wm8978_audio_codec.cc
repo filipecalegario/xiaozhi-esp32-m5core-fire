@@ -328,11 +328,15 @@ void Wm8978AudioCodec::CreateDuplexChannels(gpio_num_t mclk, gpio_num_t bclk, gp
     // Use same sample rate for input and output (required for duplex)
     assert(input_sample_rate_ == output_sample_rate_);
 
+    // Increased DMA buffer for better streaming performance
+    // Previous: 8 * 240 = 1920 frames = ~120ms at 16kHz
+    // New: 12 * 480 = 5760 frames = ~360ms at 16kHz
+    // This helps prevent buffer underruns during long audio streaming
     i2s_chan_config_t chan_cfg = {
         .id = I2S_NUM_0,
         .role = I2S_ROLE_MASTER,
-        .dma_desc_num = 8,
-        .dma_frame_num = 240,
+        .dma_desc_num = 12,
+        .dma_frame_num = 480,
         .auto_clear_after_cb = true,
         .auto_clear_before_cb = false,
         .intr_priority = 0,
@@ -379,7 +383,12 @@ void Wm8978AudioCodec::CreateDuplexChannels(gpio_num_t mclk, gpio_num_t bclk, gp
     ESP_ERROR_CHECK(i2s_channel_init_std_mode(tx_handle_, &std_cfg));
     ESP_ERROR_CHECK(i2s_channel_init_std_mode(rx_handle_, &std_cfg));
 
-    ESP_LOGI(TAG, "I2S duplex channels created at %d Hz", output_sample_rate_);
+    // Enable both channels immediately and keep them running
+    // In full-duplex mode, we never disable channels to avoid clock issues
+    ESP_ERROR_CHECK(i2s_channel_enable(tx_handle_));
+    ESP_ERROR_CHECK(i2s_channel_enable(rx_handle_));
+
+    ESP_LOGI(TAG, "I2S duplex channels created and enabled at %d Hz", output_sample_rate_);
 }
 
 void Wm8978AudioCodec::SetOutputVolume(int volume) {
@@ -432,14 +441,14 @@ void Wm8978AudioCodec::EnableInput(bool enable) {
         return;
     }
 
+    // In full-duplex mode, we don't disable the I2S RX channel
+    // because TX and RX share the same clock. Disabling RX would
+    // stop the clock and break TX output.
+    // Instead, we just track the state and skip reading in Read()
     if (enable) {
-        // Enable RX channel
-        ESP_ERROR_CHECK(i2s_channel_enable(rx_handle_));
         ESP_LOGI(TAG, "Microphone enabled");
     } else {
-        // Disable RX channel
-        ESP_ERROR_CHECK(i2s_channel_disable(rx_handle_));
-        ESP_LOGI(TAG, "Microphone disabled");
+        ESP_LOGI(TAG, "Microphone disabled (RX channel kept running for duplex)");
     }
 
     AudioCodec::EnableInput(enable);
@@ -452,24 +461,22 @@ void Wm8978AudioCodec::EnableOutput(bool enable) {
         return;
     }
 
+    // In full-duplex mode, we don't disable the I2S TX channel
+    // because TX and RX share the same clock. Disabling TX would
+    // affect the shared clock and break RX input.
+    // Instead, we just track the state and skip writing in Write()
     if (enable) {
-        // Enable TX channel
-        ESP_ERROR_CHECK(i2s_channel_enable(tx_handle_));
-
         // Enable PA if present
         if (pa_pin_ != GPIO_NUM_NC) {
             gpio_set_level(pa_pin_, 1);
         }
         ESP_LOGI(TAG, "Speaker enabled");
     } else {
-        // Disable PA first
+        // Disable PA if present (but keep I2S channel running)
         if (pa_pin_ != GPIO_NUM_NC) {
             gpio_set_level(pa_pin_, 0);
         }
-
-        // Disable TX channel
-        ESP_ERROR_CHECK(i2s_channel_disable(tx_handle_));
-        ESP_LOGI(TAG, "Speaker disabled");
+        ESP_LOGI(TAG, "Speaker disabled (TX channel kept running for duplex)");
     }
 
     AudioCodec::EnableOutput(enable);
@@ -527,11 +534,19 @@ int Wm8978AudioCodec::Write(const int16_t* data, int samples) {
         }
 
         size_t bytes_written = 0;
+        size_t bytes_to_write = samples * 2 * sizeof(int16_t);
+
+        // Use a reasonable timeout instead of blocking forever
+        // At 16kHz, 1024 samples = 64ms, so 500ms timeout should be enough
         esp_err_t ret = i2s_channel_write(tx_handle_, tx_stereo_buffer_,
-                                          samples * 2 * sizeof(int16_t),
-                                          &bytes_written, portMAX_DELAY);
+                                          bytes_to_write,
+                                          &bytes_written, pdMS_TO_TICKS(500));
         if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "I2S write failed: %s", esp_err_to_name(ret));
+            ESP_LOGE(TAG, "I2S write failed: %s (wrote %d/%d bytes)",
+                     esp_err_to_name(ret), bytes_written, bytes_to_write);
+        } else if (bytes_written != bytes_to_write) {
+            ESP_LOGW(TAG, "I2S write incomplete: %d/%d bytes",
+                     bytes_written, bytes_to_write);
         }
     }
     return samples;
